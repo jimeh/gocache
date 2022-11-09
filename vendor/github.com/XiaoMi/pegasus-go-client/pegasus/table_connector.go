@@ -237,11 +237,15 @@ func (p *pegasusTableConnector) updateConf(ctx context.Context) error {
 	return nil
 }
 
+func isPartitionValid(oldCount int, respCount int) bool {
+	return oldCount == 0 || oldCount == respCount || oldCount*2 == respCount || oldCount == respCount*2
+}
+
 func (p *pegasusTableConnector) handleQueryConfigResp(resp *replication.QueryCfgResponse) error {
 	if resp.Err.Errno != base.ERR_OK.String() {
 		return errors.New(resp.Err.Errno)
 	}
-	if resp.PartitionCount == 0 || len(resp.Partitions) != int(resp.PartitionCount) {
+	if resp.PartitionCount == 0 || len(resp.Partitions) != int(resp.PartitionCount) || !isPartitionValid(len(p.parts), int(resp.PartitionCount)) {
 		return fmt.Errorf("invalid table configuration: response [%v]", resp)
 	}
 
@@ -250,22 +254,30 @@ func (p *pegasusTableConnector) handleQueryConfigResp(resp *replication.QueryCfg
 
 	p.appID = resp.AppID
 
-	if len(resp.Partitions) > len(p.parts) {
-		// during partition split or first configuration update of client.
-		for _, part := range p.parts {
-			part.session.Close()
-		}
+	if len(resp.Partitions) != len(p.parts) {
+		p.logger.Printf("table[%s] partition count update from %d to %d", p.tableName, len(p.parts), len(resp.Partitions))
 		p.parts = make([]*replicaNode, len(resp.Partitions))
 	}
 
 	// TODO(wutao1): make sure PartitionIndex are continuous
 	for _, pconf := range resp.Partitions {
-		if pconf == nil || pconf.Primary == nil || pconf.Primary.GetRawAddress() == 0 {
+		if pconf == nil || (pconf.Ballot >= 0 && (pconf.Primary == nil || pconf.Primary.GetRawAddress() == 0)) {
 			return fmt.Errorf("unable to resolve routing table [appid: %d]: [%v]", p.appID, pconf)
 		}
+
+		var s *session.ReplicaSession
+		if pconf.Ballot >= 0 {
+			s = p.replica.GetReplica(pconf.Primary.GetAddress())
+		} else {
+			// table is partition split, and child partition is not ready
+			// child requests should be redirected to its parent partition
+			// this will be happened when query meta is called during partition split
+			s = nil
+		}
+
 		r := &replicaNode{
 			pconf:   pconf,
-			session: p.replica.GetReplica(pconf.Primary.GetAddress()),
+			session: s,
 		}
 		p.parts[pconf.Pid.PartitionIndex] = r
 	}
@@ -473,11 +485,11 @@ func (p *pegasusTableConnector) GetScanner(ctx context.Context, hashKey []byte, 
 
 		cmp := bytes.Compare(start.Data, stop.Data)
 		if cmp < 0 || (cmp == 0 && options.StartInclusive && options.StopInclusive) {
-			gpid, err := p.getGpid(start.Data)
-			if err != nil && gpid != nil {
+			gpid, partitionHash, err := p.getGpid(start.Data)
+			if err != nil && (gpid != nil || partitionHash != 0) {
 				return nil, err
 			}
-			return newPegasusScanner(p, gpid, options, start, stop), nil
+			return newPegasusScanner(p, gpid, partitionHash, options, start, stop), nil
 		}
 		return nil, fmt.Errorf("the scanning interval MUST NOT BE EMPTY")
 	}()
@@ -516,11 +528,13 @@ func (p *pegasusTableConnector) GetUnorderedScanners(ctx context.Context, maxSpl
 				sliceLen = k
 			}
 			gpidSlice := make([]*base.Gpid, sliceLen)
+			hashSlice := make([]uint64, sliceLen)
 			for j := 0; j < sliceLen; j++ {
 				gpidSlice[j] = allGpid[id]
+				hashSlice[j] = uint64(id)
 				id++
 			}
-			scanners[i] = newPegasusScannerForUnorderedScanners(p, gpidSlice, options)
+			scanners[i] = newPegasusScannerForUnorderedScanners(p, gpidSlice, hashSlice, options)
 		}
 		return scanners, nil
 	}()
@@ -538,10 +552,7 @@ func (p *pegasusTableConnector) CheckAndSet(ctx context.Context, hashKey []byte,
 	request.CheckOperand = &base.Blob{Data: checkOperand}
 	request.CheckSortKey = &base.Blob{Data: checkSortKey}
 	request.HashKey = &base.Blob{Data: hashKey}
-	request.SetExpireTsSeconds = 0
-	if options.SetValueTTLSeconds != 0 {
-		request.SetExpireTsSeconds = expireTsSeconds(time.Second * time.Duration(options.SetValueTTLSeconds))
-	}
+	request.SetExpireTsSeconds = int32(options.SetValueTTLSeconds)
 	request.SetSortKey = &base.Blob{Data: setSortKey}
 	request.SetValue = &base.Blob{Data: setValue}
 	request.ReturnCheckValue = options.ReturnCheckValue
@@ -587,10 +598,11 @@ func (p *pegasusTableConnector) runPartitionOp(ctx context.Context, hashKey []by
 	if err := req.Validate(); err != nil {
 		return 0, WrapError(err, optype)
 	}
-	gpid, part := p.getPartition(hashKey)
-	res, err := retryFailOver(ctx, func() (confUpdated bool, result interface{}, err error) {
-		result, err = req.Run(ctx, gpid, part)
-		confUpdated, err = p.handleReplicaError(err, part)
+	partitionHash := crc64Hash(hashKey)
+	gpid, part := p.getPartition(partitionHash)
+	res, err := retryFailOver(ctx, func() (confUpdated bool, result interface{}, retry bool, err error) {
+		result, err = req.Run(ctx, gpid, partitionHash, part)
+		confUpdated, retry, err = p.handleReplicaError(err, part)
 		return
 	})
 	return res, p.wrapPartitionError(err, gpid, part, optype)
@@ -621,17 +633,30 @@ func (p *pegasusTableConnector) BatchGet(ctx context.Context, keys []CompositeKe
 	return v, WrapError(err, OpBatchGet)
 }
 
-func getPartitionIndex(hashKey []byte, partitionCount int) int32 {
-	return int32(crc64Hash(hashKey) % uint64(partitionCount))
+func (p *pegasusTableConnector) isPartitionValid(index int) bool {
+	if index < 0 || index >= len(p.parts) {
+		return false
+	}
+	return p.parts[index].pconf.Ballot > 0
 }
 
-func (p *pegasusTableConnector) getPartition(hashKey []byte) (*base.Gpid, *session.ReplicaSession) {
+func (p *pegasusTableConnector) getPartitionIndex(partitionHash uint64) int32 {
+	partitionCount := int32(len(p.parts))
+	index := int32(partitionHash % uint64(partitionCount))
+	if !p.isPartitionValid(int(index)) {
+		p.logger.Printf("table [%s] partition[%d] is not valid now, requests will send to partition[%d]", p.tableName, index, index-partitionCount/2)
+		index -= partitionCount / 2
+	}
+	return index
+}
+
+func (p *pegasusTableConnector) getPartition(partitionHash uint64) (*base.Gpid, *session.ReplicaSession) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	gpid := &base.Gpid{
 		Appid:          p.appID,
-		PartitionIndex: getPartitionIndex(hashKey, len(p.parts)),
+		PartitionIndex: p.getPartitionIndex(partitionHash),
 	}
 	part := p.parts[gpid.PartitionIndex].session
 
@@ -649,14 +674,15 @@ func (p *pegasusTableConnector) Close() error {
 	return nil
 }
 
-func (p *pegasusTableConnector) handleReplicaError(err error, replica *session.ReplicaSession) (bool, error) {
+func (p *pegasusTableConnector) handleReplicaError(err error, replica *session.ReplicaSession) (bool, bool, error) {
 	if err != nil {
 		confUpdate := false
+		retry := false
 
 		switch err {
 		case base.ERR_OK:
 			// should not happen
-			return false, nil
+			return false, false, nil
 
 		case base.ERR_TIMEOUT:
 		case context.DeadlineExceeded:
@@ -668,9 +694,14 @@ func (p *pegasusTableConnector) handleReplicaError(err error, replica *session.R
 
 		case base.ERR_BUSY:
 			// throttled by server, skip confUpdate
+		case base.ERR_SPLITTING:
+			// table is executing partition split, skip confUpdate
+		case base.ERR_DISK_INSUFFICIENT:
+			// server disk space is insufficient, skip confUpdate
 
 		default:
 			confUpdate = true
+			retry = true
 		}
 
 		switch err {
@@ -680,6 +711,13 @@ func (p *pegasusTableConnector) handleReplicaError(err error, replica *session.R
 			err = errors.New(err.Error() + " The target replica is not primary")
 		case base.ERR_OBJECT_NOT_FOUND:
 			err = errors.New(err.Error() + " The replica server doesn't serve this partition")
+		case base.ERR_SPLITTING:
+			err = errors.New(err.Error() + " The table is executing partition split")
+		case base.ERR_PARENT_PARTITION_MISUSED:
+			err = errors.New(err.Error() + " The table finish partition split, will update config")
+			retry = false
+		case base.ERR_DISK_INSUFFICIENT:
+			err = errors.New(err.Error() + " The server disk space is insufficient")
 		}
 
 		if confUpdate {
@@ -687,9 +725,9 @@ func (p *pegasusTableConnector) handleReplicaError(err error, replica *session.R
 			p.tryConfUpdate(err, replica)
 		}
 
-		return confUpdate, err
+		return confUpdate, retry, err
 	}
-	return false, nil
+	return false, false, nil
 }
 
 // tryConfUpdate makes an attempt to update table configuration by querying meta server.
@@ -737,23 +775,25 @@ func (p *pegasusTableConnector) selfUpdate() bool {
 	return true
 }
 
-func (p *pegasusTableConnector) getGpid(key []byte) (*base.Gpid, error) {
+func (p *pegasusTableConnector) getGpid(key []byte) (*base.Gpid, uint64, error) {
 	if key == nil || len(key) < 2 {
-		return nil, fmt.Errorf("unable to getGpid by key: %s", key)
+		return nil, 0, fmt.Errorf("unable to getGpid by key: %s", key)
 	}
 
 	hashKeyLen := 0xFFFF & binary.BigEndian.Uint16(key[:2])
 	if hashKeyLen != 0xFFFF && int(2+hashKeyLen) <= len(key) {
 		gpid := &base.Gpid{Appid: p.appID}
+		var partitionHash uint64
 		if hashKeyLen == 0 {
-			gpid.PartitionIndex = int32(crc64Hash(key[2:]) % uint64(len(p.parts)))
+			partitionHash = crc64Hash(key[2:])
 		} else {
-			gpid.PartitionIndex = int32(crc64Hash(key[2:hashKeyLen+2]) % uint64(len(p.parts)))
+			partitionHash = crc64Hash(key[2 : hashKeyLen+2])
 		}
-		return gpid, nil
+		gpid.PartitionIndex = int32(partitionHash % uint64(len(p.parts)))
+		return gpid, partitionHash, nil
 
 	}
-	return nil, fmt.Errorf("unable to getGpid, hashKey length invalid")
+	return nil, 0, fmt.Errorf("unable to getGpid, hashKey length invalid")
 }
 
 func (p *pegasusTableConnector) getAllGpid() []*base.Gpid {

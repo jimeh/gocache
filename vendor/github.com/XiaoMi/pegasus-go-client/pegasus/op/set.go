@@ -49,6 +49,9 @@ func (r *Set) Validate() error {
 	if err := validateValue(r.Value); err != nil {
 		return err
 	}
+	if err := validateTTL(r.TTL); err != nil {
+		return err
+	}
 
 	key := encodeHashKeySortKey(r.HashKey, r.SortKey)
 	val := &base.Blob{Data: r.Value}
@@ -61,8 +64,8 @@ func (r *Set) Validate() error {
 }
 
 // Run operation.
-func (r *Set) Run(ctx context.Context, gpid *base.Gpid, rs *session.ReplicaSession) (interface{}, error) {
-	resp, err := rs.Put(ctx, gpid, r.req)
+func (r *Set) Run(ctx context.Context, gpid *base.Gpid, partitionHash uint64, rs *session.ReplicaSession) (interface{}, error) {
+	resp, err := rs.Put(ctx, gpid, partitionHash, r.req)
 	if err := wrapRPCFailure(resp, err); err != nil {
 		return 0, err
 	}

@@ -358,3 +358,303 @@ func (m *MetaManager) Balance(ctx context.Context, req *admin.BalanceRequest) (*
 	}
 	return nil, err
 }
+
+func (ms *metaSession) startBackupApp(ctx context.Context, req *admin.StartBackupAppRequest) (*admin.StartBackupAppResponse, error) {
+	arg := admin.NewAdminClientStartBackupAppArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_START_BACKUP_APP")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientStartBackupAppResult)
+	return ret.GetSuccess(), nil
+}
+
+// StartBackupApp is auto-generated
+func (m *MetaManager) StartBackupApp(ctx context.Context, req *admin.StartBackupAppRequest) (*admin.StartBackupAppResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.startBackupApp(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.StartBackupAppResponse), fmt.Errorf("StartBackupApp failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.StartBackupAppResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) queryBackupStatus(ctx context.Context, req *admin.QueryBackupStatusRequest) (*admin.QueryBackupStatusResponse, error) {
+	arg := admin.NewAdminClientQueryBackupStatusArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_QUERY_BACKUP_STATUS")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientQueryBackupStatusResult)
+	return ret.GetSuccess(), nil
+}
+
+// QueryBackupStatus is auto-generated
+func (m *MetaManager) QueryBackupStatus(ctx context.Context, req *admin.QueryBackupStatusRequest) (*admin.QueryBackupStatusResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.queryBackupStatus(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.QueryBackupStatusResponse), fmt.Errorf("QueryBackupStatus failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.QueryBackupStatusResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) restoreApp(ctx context.Context, req *admin.RestoreAppRequest) (*admin.CreateAppResponse, error) {
+	arg := admin.NewAdminClientRestoreAppArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_START_RESTORE")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientRestoreAppResult)
+	return ret.GetSuccess(), nil
+}
+
+// RestoreApp is auto-generated
+func (m *MetaManager) RestoreApp(ctx context.Context, req *admin.RestoreAppRequest) (*admin.CreateAppResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.restoreApp(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.CreateAppResponse), fmt.Errorf("RestoreApp failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.CreateAppResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) startPartitionSplit(ctx context.Context, req *admin.StartPartitionSplitRequest) (*admin.StartPartitionSplitResponse, error) {
+	arg := admin.NewAdminClientStartPartitionSplitArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_START_PARTITION_SPLIT")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientStartPartitionSplitResult)
+	return ret.GetSuccess(), nil
+}
+
+// StartPartitionSplit is auto-generated
+func (m *MetaManager) StartPartitionSplit(ctx context.Context, req *admin.StartPartitionSplitRequest) (*admin.StartPartitionSplitResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.startPartitionSplit(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.StartPartitionSplitResponse), fmt.Errorf("StartPartitionSplit failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.StartPartitionSplitResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) querySplitStatus(ctx context.Context, req *admin.QuerySplitRequest) (*admin.QuerySplitResponse, error) {
+	arg := admin.NewAdminClientQuerySplitStatusArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_QUERY_PARTITION_SPLIT")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientQuerySplitStatusResult)
+	return ret.GetSuccess(), nil
+}
+
+// QuerySplitStatus is auto-generated
+func (m *MetaManager) QuerySplitStatus(ctx context.Context, req *admin.QuerySplitRequest) (*admin.QuerySplitResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.querySplitStatus(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.QuerySplitResponse), fmt.Errorf("QuerySplitStatus failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.QuerySplitResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) controlPartitionSplit(ctx context.Context, req *admin.ControlSplitRequest) (*admin.ControlSplitResponse, error) {
+	arg := admin.NewAdminClientControlPartitionSplitArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_CONTROL_PARTITION_SPLIT")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientControlPartitionSplitResult)
+	return ret.GetSuccess(), nil
+}
+
+// ControlPartitionSplit is auto-generated
+func (m *MetaManager) ControlPartitionSplit(ctx context.Context, req *admin.ControlSplitRequest) (*admin.ControlSplitResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.controlPartitionSplit(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.ControlSplitResponse), fmt.Errorf("ControlPartitionSplit failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.ControlSplitResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) startBulkLoad(ctx context.Context, req *admin.StartBulkLoadRequest) (*admin.StartBulkLoadResponse, error) {
+	arg := admin.NewAdminClientStartBulkLoadArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_START_BULK_LOAD")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientStartBulkLoadResult)
+	return ret.GetSuccess(), nil
+}
+
+// StartBulkLoad is auto-generated
+func (m *MetaManager) StartBulkLoad(ctx context.Context, req *admin.StartBulkLoadRequest) (*admin.StartBulkLoadResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.startBulkLoad(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.StartBulkLoadResponse), fmt.Errorf("StartBulkLoad failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.StartBulkLoadResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) queryBulkLoadStatus(ctx context.Context, req *admin.QueryBulkLoadRequest) (*admin.QueryBulkLoadResponse, error) {
+	arg := admin.NewAdminClientQueryBulkLoadStatusArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_QUERY_BULK_LOAD_STATUS")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientQueryBulkLoadStatusResult)
+	return ret.GetSuccess(), nil
+}
+
+// QueryBulkLoadStatus is auto-generated
+func (m *MetaManager) QueryBulkLoadStatus(ctx context.Context, req *admin.QueryBulkLoadRequest) (*admin.QueryBulkLoadResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.queryBulkLoadStatus(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.QueryBulkLoadResponse), fmt.Errorf("QueryBulkLoadStatus failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.QueryBulkLoadResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) controlBulkLoad(ctx context.Context, req *admin.ControlBulkLoadRequest) (*admin.ControlBulkLoadResponse, error) {
+	arg := admin.NewAdminClientControlBulkLoadArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_CONTROL_BULK_LOAD")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientControlBulkLoadResult)
+	return ret.GetSuccess(), nil
+}
+
+// ControlBulkLoad is auto-generated
+func (m *MetaManager) ControlBulkLoad(ctx context.Context, req *admin.ControlBulkLoadRequest) (*admin.ControlBulkLoadResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.controlBulkLoad(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.ControlBulkLoadResponse), fmt.Errorf("ControlBulkLoad failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.ControlBulkLoadResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) clearBulkLoad(ctx context.Context, req *admin.ClearBulkLoadStateRequest) (*admin.ClearBulkLoadStateResponse, error) {
+	arg := admin.NewAdminClientClearBulkLoadArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_CLEAR_BULK_LOAD")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientClearBulkLoadResult)
+	return ret.GetSuccess(), nil
+}
+
+// ClearBulkLoad is auto-generated
+func (m *MetaManager) ClearBulkLoad(ctx context.Context, req *admin.ClearBulkLoadStateRequest) (*admin.ClearBulkLoadStateResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.clearBulkLoad(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.ClearBulkLoadStateResponse), fmt.Errorf("ClearBulkLoad failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.ClearBulkLoadStateResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) startManualCompact(ctx context.Context, req *admin.StartAppManualCompactRequest) (*admin.StartAppManualCompactResponse, error) {
+	arg := admin.NewAdminClientStartManualCompactArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_START_MANUAL_COMPACT")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientStartManualCompactResult)
+	return ret.GetSuccess(), nil
+}
+
+// StartManualCompact is auto-generated
+func (m *MetaManager) StartManualCompact(ctx context.Context, req *admin.StartAppManualCompactRequest) (*admin.StartAppManualCompactResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.startManualCompact(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.StartAppManualCompactResponse), fmt.Errorf("StartManualCompact failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.StartAppManualCompactResponse), nil
+	}
+	return nil, err
+}
+
+func (ms *metaSession) queryManualCompact(ctx context.Context, req *admin.QueryAppManualCompactRequest) (*admin.QueryAppManualCompactResponse, error) {
+	arg := admin.NewAdminClientQueryManualCompactArgs()
+	arg.Req = req
+	result, err := ms.call(ctx, arg, "RPC_CM_QUERY_MANUAL_COMPACT_STATUS")
+	if err != nil {
+		return nil, fmt.Errorf("RPC to session %s failed: %s", ms, err)
+	}
+	ret, _ := result.(*admin.AdminClientQueryManualCompactResult)
+	return ret.GetSuccess(), nil
+}
+
+// QueryManualCompact is auto-generated
+func (m *MetaManager) QueryManualCompact(ctx context.Context, req *admin.QueryAppManualCompactRequest) (*admin.QueryAppManualCompactResponse, error) {
+	resp, err := m.call(ctx, func(rpcCtx context.Context, ms *metaSession) (metaResponse, error) {
+		return ms.queryManualCompact(rpcCtx, req)
+	})
+	if err == nil {
+		if resp.GetErr().Errno != base.ERR_OK.String() {
+			return resp.(*admin.QueryAppManualCompactResponse), fmt.Errorf("QueryManualCompact failed: %s", resp.GetErr().String())
+		}
+		return resp.(*admin.QueryAppManualCompactResponse), nil
+	}
+	return nil, err
+}

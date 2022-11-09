@@ -3,7 +3,7 @@ module github.com/eko/gocache/v3
 go 1.18
 
 require (
-	github.com/XiaoMi/pegasus-go-client v0.0.0-20210427083443-f3b6b08bc4c2
+	github.com/XiaoMi/pegasus-go-client v0.0.0-20220519103347-ba0e68465cd5
 	github.com/allegro/bigcache/v3 v3.0.2
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d
 	github.com/coocood/freecache v1.2.3

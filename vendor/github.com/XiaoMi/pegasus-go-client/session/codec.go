@@ -38,7 +38,8 @@ func (p *PegasusCodec) Marshal(v interface{}) ([]byte, error) {
 		appId:          r.Gpid.Appid,
 		partitionIndex: r.Gpid.PartitionIndex,
 		threadHash:     gpidToThreadHash(r.Gpid),
-		partitionHash:  0,
+		partitionHash:  r.partitionHash,
+		clientTimeout:  r.timeout,
 	}
 
 	// skip the first ThriftHeaderBytesLen bytes
@@ -215,6 +216,21 @@ var nameToResultMap = map[string]func() RpcResponseResult{
 			Success: admin.NewBalanceResponse(),
 		}
 	},
+	"RPC_CM_START_BACKUP_APP_ACK": func() RpcResponseResult {
+		return &admin.AdminClientStartBackupAppResult{
+			Success: admin.NewStartBackupAppResponse(),
+		}
+	},
+	"RPC_CM_QUERY_BACKUP_STATUS_ACK": func() RpcResponseResult {
+		return &admin.AdminClientQueryBackupStatusResult{
+			Success: admin.NewQueryBackupStatusResponse(),
+		}
+	},
+	"RPC_CM_START_RESTORE_ACK": func() RpcResponseResult {
+		return &admin.AdminClientRestoreAppResult{
+			Success: admin.NewCreateAppResponse(),
+		}
+	},
 	"RPC_QUERY_DISK_INFO_ACK": func() RpcResponseResult {
 		return &radmin.ReplicaClientQueryDiskInfoResult{
 			Success: radmin.NewQueryDiskInfoResponse(),
@@ -223,6 +239,56 @@ var nameToResultMap = map[string]func() RpcResponseResult{
 	"RPC_REPLICA_DISK_MIGRATE_ACK": func() RpcResponseResult {
 		return &radmin.ReplicaClientDiskMigrateResult{
 			Success: radmin.NewReplicaDiskMigrateResponse(),
+		}
+	},
+	"RPC_CM_START_PARTITION_SPLIT_ACK": func() RpcResponseResult {
+		return &admin.AdminClientStartPartitionSplitResult{
+			Success: admin.NewStartPartitionSplitResponse(),
+		}
+	},
+	"RPC_CM_QUERY_PARTITION_SPLIT_ACK": func() RpcResponseResult {
+		return &admin.AdminClientQuerySplitStatusResult{
+			Success: admin.NewQuerySplitResponse(),
+		}
+	},
+	"RPC_CM_CONTROL_PARTITION_SPLIT_ACK": func() RpcResponseResult {
+		return &admin.AdminClientControlPartitionSplitResult{
+			Success: admin.NewControlSplitResponse(),
+		}
+	},
+	"RPC_ADD_NEW_DISK_ACK": func() RpcResponseResult {
+		return &radmin.ReplicaClientAddDiskResult{
+			Success: radmin.NewAddNewDiskResponse(),
+		}
+	},
+	"RPC_CM_START_BULK_LOAD_ACK": func() RpcResponseResult {
+		return &admin.AdminClientStartBulkLoadResult{
+			Success: admin.NewStartBulkLoadResponse(),
+		}
+	},
+	"RPC_CM_QUERY_BULK_LOAD_STATUS_ACK": func() RpcResponseResult {
+		return &admin.AdminClientQueryBulkLoadStatusResult{
+			Success: admin.NewQueryBulkLoadResponse(),
+		}
+	},
+	"RPC_CM_CONTROL_BULK_LOAD_ACK": func() RpcResponseResult {
+		return &admin.AdminClientControlBulkLoadResult{
+			Success: admin.NewControlBulkLoadResponse(),
+		}
+	},
+	"RPC_CM_CLEAR_BULK_LOAD_ACK": func() RpcResponseResult {
+		return &admin.AdminClientClearBulkLoadResult{
+			Success: admin.NewClearBulkLoadStateResponse(),
+		}
+	},
+	"RPC_CM_START_MANUAL_COMPACT_ACK": func() RpcResponseResult {
+		return &admin.AdminClientStartManualCompactResult{
+			Success: admin.NewStartAppManualCompactResponse(),
+		}
+	},
+	"RPC_CM_QUERY_MANUAL_COMPACT_STATUS_ACK": func() RpcResponseResult {
+		return &admin.AdminClientQueryManualCompactResult{
+			Success: admin.NewQueryAppManualCompactResponse(),
 		}
 	},
 	"RPC_RRDB_RRDB_GET_ACK": func() RpcResponseResult {
@@ -343,13 +409,15 @@ type RpcResponseResult interface {
 }
 
 type PegasusRpcCall struct {
-	Args   RpcRequestArgs
-	Result RpcResponseResult
-	Name   string // the rpc's name
-	SeqId  int32
-	Gpid   *base.Gpid
-	RawReq []byte // the marshalled request in bytes
-	Err    error
+	Args          RpcRequestArgs
+	Result        RpcResponseResult
+	Name          string // the rpc's name
+	SeqId         int32
+	Gpid          *base.Gpid
+	partitionHash uint64
+	RawReq        []byte // the marshalled request in bytes
+	Err           error
+	timeout       uint32
 
 	// hooks on each stage during rpc processing
 	OnRpcCall time.Time
@@ -368,12 +436,14 @@ func (call *PegasusRpcCall) TilNow() time.Duration {
 	return time.Since(call.OnRpcCall)
 }
 
-func MarshallPegasusRpc(codec rpc.Codec, seqId int32, gpid *base.Gpid, args RpcRequestArgs, name string) (*PegasusRpcCall, error) {
+func MarshallPegasusRpc(codec rpc.Codec, seqId int32, gpid *base.Gpid, partitionHash uint64, args RpcRequestArgs, name string, timeout uint32) (*PegasusRpcCall, error) {
 	rcall := &PegasusRpcCall{}
 	rcall.Args = args
 	rcall.Name = name
 	rcall.SeqId = seqId
 	rcall.Gpid = gpid
+	rcall.partitionHash = partitionHash
+	rcall.timeout = timeout
 
 	var err error
 	rcall.RawReq, err = codec.Marshal(rcall)

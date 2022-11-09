@@ -21,6 +21,7 @@ package op
 
 import (
 	"context"
+	"time"
 
 	"github.com/XiaoMi/pegasus-go-client/idl/base"
 	"github.com/XiaoMi/pegasus-go-client/idl/rrdb"
@@ -45,12 +46,17 @@ func (r *CheckAndSet) Validate() error {
 	if err := validateHashKey(r.Req.HashKey.Data); err != nil {
 		return err
 	}
+	if err := validateTTL(time.Second * time.Duration(r.Req.SetExpireTsSeconds)); err != nil {
+		return err
+	}
+
+	r.Req.SetExpireTsSeconds = expireTsSeconds(time.Second * time.Duration(r.Req.SetExpireTsSeconds))
 	return nil
 }
 
 // Run operation.
-func (r *CheckAndSet) Run(ctx context.Context, gpid *base.Gpid, rs *session.ReplicaSession) (interface{}, error) {
-	resp, err := rs.CheckAndSet(ctx, gpid, r.Req)
+func (r *CheckAndSet) Run(ctx context.Context, gpid *base.Gpid, partitionHash uint64, rs *session.ReplicaSession) (interface{}, error) {
+	resp, err := rs.CheckAndSet(ctx, gpid, partitionHash, r.Req)
 	err = wrapRPCFailure(resp, err)
 	if err == base.TryAgain {
 		err = nil
